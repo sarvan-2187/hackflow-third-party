@@ -1,0 +1,14 @@
+{
+  "name": "raptor-relay",
+  "version": "1.0.0",
+  "description": "A third-party app that integrates with HackFlow through its API keys and signed webhooks.",
+  "type": "module",
+  "private": true,
+  "license": "MIT",
+  "engines": { "node": ">=20.10" },
+  "scripts": {
+    "start": "node server.mjs",
+    "demo": "node scripts/demo.mjs",
+    "test": "node --test"
+  }
+}

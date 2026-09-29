@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Raptor Relay</title>
+<style>
+  :root { --bg:#f6f7f8; --card:#fff; --ink:#1f2426; --muted:#5b6469; --line:#e3e6e8; --brand:#0b7a55; --bad:#b42318; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#121516; --card:#1c2022; --ink:#eef1f2; --muted:#a3adb2; --line:#2c3235; --brand:#3ddc84; --bad:#f97066; }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif; }
+  header { padding:20px 24px; border-bottom:1px solid var(--line); background:var(--card); display:flex; flex-wrap:wrap; gap:12px; align-items:baseline; justify-content:space-between; }
+  h1 { margin:0; font-size:20px; } h2 { margin:0 0 12px; font-size:16px; }
+  main { display:grid; gap:16px; padding:16px; grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); max-width:1200px; margin:0 auto; }
+  section { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:16px; min-width:0; }
+  .muted { color:var(--muted); font-size:13px; }
+  .pill { display:inline-block; padding:1px 8px; border-radius:99px; border:1px solid var(--line); font-size:12px; }
+  .ok { color:var(--brand); } .bad { color:var(--bad); }
+  button { font:inherit; padding:6px 12px; border-radius:6px; border:1px solid var(--brand); background:var(--brand); color:#fff; cursor:pointer; }
+  button.secondary { background:transparent; color:var(--brand); }
+  input, select, textarea { font:inherit; width:100%; padding:6px 8px; border:1px solid var(--line); border-radius:6px; background:var(--bg); color:var(--ink); }
+  label { display:block; margin:8px 0 4px; font-size:13px; color:var(--muted); }
+  ol, ul { margin:0; padding-left:20px; }
+  #feed { list-style:none; padding:0; max-height:460px; overflow:auto; }
+  #feed li { border-bottom:1px solid var(--line); padding:8px 0; }
+  code { font-size:12px; word-break:break-all; }
+  table { width:100%; border-collapse:collapse; font-size:14px; }
+  th, td { text-align:left; padding:4px 6px; border-bottom:1px solid var(--line); }
+  .row { display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; }
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>Raptor Relay</h1>
+    <div class="muted">A third-party app wired to HackFlow with an API key and signed webhooks.</div>
+  </div>
+  <div id="status" class="muted">Connecting...</div>
+</header>
+<main>
+  <section>
+    <h2>Connection</h2>
+    <div id="conn" class="muted"></div>
+    <label for="event">Event</label>
+    <select id="event"></select>
+    <div class="row">
+      <button id="register">Register webhook + test ping</button>
+      <button id="refresh" class="secondary">Reconnect</button>
+    </div>
+    <p id="register-out" class="muted"></p>
+  </section>
+
+  <section>
+    <h2>Live webhook feed <span id="count" class="pill">0</span></h2>
+    <p class="muted">Every entry below passed Ed25519 verification against HackFlow's pinned public key.
+      Rejected (forged, stale or replayed) deliveries: <strong id="rejected">0</strong>.</p>
+    <ul id="feed"></ul>
+  </section>
+
+  <section>
+    <h2>Standings (pulled over the API)</h2>
+    <div class="row"><button id="pull" class="secondary">Pull gallery + results</button></div>
+    <p id="snap-note" class="muted"></p>
+    <table id="standings"><thead><tr><th>#</th><th>Project</th><th>Judges</th><th>z&#772;</th></tr></thead><tbody></tbody></table>
+  </section>
+
+  <section>
+    <h2>Post an announcement</h2>
+    <p class="muted">A write through the API: HackFlow shows it on the event page and sends it back
+      here as an <code>announcement.posted</code> webhook.</p>
+    <label for="a-title">Title</label>
+    <input id="a-title" value="Hello from Raptor Relay">
+    <label for="a-body">Message</label>
+    <textarea id="a-body" rows="3">This update was posted by a third-party app through the HackFlow API.</textarea>
+    <div class="row"><button id="announce">Post</button></div>
+    <p id="announce-out" class="muted"></p>
+  </section>
+</main>
+<script>
+const $ = (id) => document.getElementById(id);
+const el = (tag, text, cls) => { const n = document.createElement(tag); if (text != null) n.textContent = text; if (cls) n.className = cls; return n; };
+
+async function call(path, body) {
+  const res = await fetch(path, body === undefined ? {} : { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || res.statusText);
+  return data;
+}
+
+function renderEntry(entry, prepend) {
+  const r = entry.record;
+  const li = el("li");
+  const head = el("div");
+  head.append(el("strong", r.topic), " ", el("span", `event ${r.event_id}`, "pill"));
+  const ids = Object.entries(r).filter(([k]) => k.endsWith("_id") && !["event_id", "delivery_id"].includes(k))
+    .map(([k, v]) => `${k}=${v}`).join("  ");
+  li.append(head, el("div", ids || (r.entity_type ? `${r.entity_type} ${r.entity_id ?? ""}` : ""), "muted"),
+    el("div", `issued ${r.issued_at} · delivery ${String(r.delivery_id || "").slice(0, 8)}`, "muted"));
+  prepend ? $("feed").prepend(li) : $("feed").append(li);
+  $("count").textContent = String($("feed").children.length);
+}
+
+async function load() {
+  const s = await call("/api/state");
+  $("status").textContent = s.last_error ? `HackFlow unreachable: ${s.last_error}` : `Connected to ${s.hackflow_url}`;
+  $("status").className = s.last_error ? "bad" : "ok";
+  $("conn").replaceChildren(
+    el("div", s.me ? `Acting as ${s.me.name} (${s.me.role}) via API key` : "No API key set: read-only public access."),
+    el("div", `Signing key: ${s.key_fingerprint || "not fetched"}...`),
+    el("div", `Webhook endpoint: ${s.public_url ? s.public_url + "/webhooks/hackflow" : "set PUBLIC_URL"}`),
+  );
+  $("event").replaceChildren(...s.events.map((e) => { const o = el("option", `${e.name} (#${e.id})`); o.value = e.id; o.selected = e.id === s.event_id; return o; }));
+  $("rejected").textContent = String(s.rejected);
+  $("feed").replaceChildren();
+  s.feed.forEach((e) => renderEntry(e, false));
+}
+
+const eventId = () => Number($("event").value);
+
+$("register").onclick = async () => {
+  $("register-out").textContent = "Registering...";
+  try {
+    const r = await call("/actions/register-webhook", { event_id: eventId() });
+    $("register-out").textContent = `Webhook #${r.webhook.id} -> ${r.webhook.url}. Test ping: ${r.test.last_status}.`;
+  } catch (e) { $("register-out").textContent = e.message; }
+};
+$("refresh").onclick = async () => { await call("/actions/refresh", {}); load(); };
+$("announce").onclick = async () => {
+  try {
+    const a = await call("/actions/announce", { event_id: eventId(), title: $("a-title").value, body: $("a-body").value });
+    $("announce-out").textContent = `Posted announcement #${a.id}. Watch the feed for its webhook.`;
+  } catch (e) { $("announce-out").textContent = e.message; }
+};
+$("pull").onclick = async () => {
+  const snap = await call(`/api/snapshot?event_id=${eventId()}`);
+  const rows = Array.isArray(snap.results) ? snap.results : [];
+  $("snap-note").textContent = Array.isArray(snap.gallery)
+    ? `${snap.gallery.length} projects in the public gallery.` + (rows.length ? "" : " Results: " + (snap.results.error || "none yet"))
+    : `Gallery: ${snap.gallery.error}`;
+  $("standings").tBodies[0].replaceChildren(...rows.slice(0, 15).map((r) => {
+    const tr = el("tr");
+    tr.append(el("td", r.rank), el("td", r.submission_title), el("td", `${r.judges}/${r.assigned_judges ?? r.judges}`), el("td", r.z_bar.toFixed(3)));
+    return tr;
+  }));
+};
+
+new EventSource("/stream").onmessage = (m) => renderEntry(JSON.parse(m.data), true);
+load().catch((e) => { $("status").textContent = e.message; });
+</script>
+</body>
+</html>
