@@ -1,5 +1,12 @@
 # Raptor Relay: a third-party app for HackFlow
 
+
+**Credentials for testing the deployed third-party application:**
+
+**User Name**: admin </br>
+**Password**: Admin@1234
+
+
 Raptor Relay is a small, independent app that connects to a
 [HackFlow](https://github.com/sarvan-2187/dog-food) portal from the outside, the way a
 Discord bot, a CRM sync or a live results screen would. It shows that HackFlow is API-ready
@@ -14,11 +21,6 @@ by using the two integration points HackFlow gives outside software:
 
 *The dashboard, live against a seeded HackFlow. The feed has four verified deliveries. The
 fifth delivery, a forged one, was rejected and is counted as "Rejected: 1".*
-
-**Credentials for testing the deployed third-party application:**
-
-**User Name**: admin
-**Password**: Admin@1234
 
 It uses only the Node.js standard library (Node 20.10+): `fetch` for the API and
 `node:crypto` for Ed25519. There is nothing to `npm install`.
