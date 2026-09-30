@@ -15,6 +15,11 @@ by using the two integration points HackFlow gives outside software:
 *The dashboard, live against a seeded HackFlow. The feed has four verified deliveries. The
 fifth delivery, a forged one, was rejected and is counted as "Rejected: 1".*
 
+**Credentials for testing the deployed third-party application:**
+
+**User Name**: admin
+**Password**: Admin@1234
+
 It uses only the Node.js standard library (Node 20.10+): `fetch` for the API and
 `node:crypto` for Ed25519. There is nothing to `npm install`.
 
